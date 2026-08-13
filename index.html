@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CONSULTOR DE PRECIOS JG</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- SheetJS (XLSX) for Excel parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Html5-qrcode for barcode scanner -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        #reader video {
+            object-fit: cover !important;
+            border-radius: 1rem !important;
+            width: 100% !important;
+            height: 100% !important;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col antialiased">
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold shadow-md shadow-indigo-100">
+                    <i class="fa-solid fa-tags text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-base font-bold text-slate-900 tracking-tight">CONSULTOR DE PRECIOS JG</h1>
+                    <p class="text-[11px] text-slate-500 font-medium">Sistema de Precios e Inventario en la Nube</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+                <div id="status-badge" class="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-200">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span id="status-text">Cargado (0 items)</span>
+                </div>
+
+                <button onclick="openAdminGate()" class="p-2.5 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition border border-slate-200 shadow-2xs flex items-center space-x-1.5 text-xs font-semibold">
+                    <i class="fa-solid fa-lock text-sm"></i>
+                    <span class="hidden md:inline">Administración</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 flex flex-col space-y-6">
+
+        <!-- VIEW 1: CONSULTOR (Default) -->
+        <div id="view-consult" class="space-y-6">
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-900">Consulta de Precios</h2>
+                        <p class="text-xs text-slate-500">Escanea un código de barras o busca por código / nombre de producto</p>
+                    </div>
+                    <div id="consult-counter-banner" class="px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-700 text-xs font-semibold flex items-center space-x-2 shadow-2xs">
+                        <i class="fa-solid fa-database text-indigo-500"></i>
+                        <span id="consult-counter-text">0 productos disponibles</span>
+                    </div>
+                </div>
+
+                <div class="relative flex items-center">
+                    <div class="absolute left-4 text-slate-400">
+                        <i class="fa-solid fa-magnifying-glass text-base"></i>
+                    </div>
+                    <input type="text" id="search-input" autofocus placeholder="Escribe el código, descripción o escanea..." 
+                        class="w-full pl-11 pr-32 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-2xs">
+                    
+                    <div class="absolute right-2 flex items-center space-x-1">
+                        <button onclick="triggerPhotoScan()" title="Cargar Foto para Escanear" class="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg transition flex items-center justify-center">
+                            <i class="fa-solid fa-file-image text-sm"></i>
+                        </button>
+                        <input type="file" id="photo-scan-input" accept="image/*" class="hidden" onchange="handlePhotoScanUpload(event)">
+                        
+                        <button onclick="startBarcodeScanner()" title="Escanear con Cámara" class="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition flex items-center justify-center shadow-xs">
+                            <i class="fa-solid fa-camera text-sm"></i>
+                        </button>
+                        <button onclick="clearSearch()" id="clear-btn" title="Limpiar" class="hidden p-2 text-slate-400 hover:text-slate-600 rounded-lg transition">
+                            <i class="fa-solid fa-xmark text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Fast Camera Scan Hero Button for Mobile -->
+                <div class="block sm:hidden pt-1">
+                    <button onclick="startBarcodeScanner()" class="w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold rounded-xl text-sm shadow-md flex items-center justify-center space-x-2 transition">
+                        <i class="fa-solid fa-camera-rotate text-base"></i>
+                        <span>Abrir Cámara para Escanear Código</span>
+                    </button>
+                </div>
+
+                <div id="suggestions-box" class="hidden bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto divide-y divide-slate-100 z-20"></div>
+            </div>
+
+            <!-- Result Display Section -->
+            <div id="result-container" class="hidden space-y-4">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-gradient-to-r from-indigo-600 to-indigo-700 p-5 text-white flex justify-between items-start">
+                        <div class="space-y-1">
+                            <div class="flex items-center space-x-2">
+                                <span id="prod-category" class="inline-block px-2.5 py-0.5 bg-white/20 text-white text-[11px] font-semibold rounded-md backdrop-blur-xs">GENERAL</span>
+                                <span id="header-discount-badge" class="hidden px-2.5 py-0.5 bg-emerald-500 text-white text-[11px] font-bold rounded-md uppercase tracking-wider shadow-xs">0% DESC</span>
+                            </div>
+                            <h3 id="prod-name" class="text-xl font-bold tracking-tight">Nombre del Producto</h3>
+                            <p id="prod-code" class="text-xs text-indigo-100 font-mono">CÓDIGO: 000000</p>
+                        </div>
+                        <div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-xs">
+                            <i class="fa-solid fa-box-open text-lg"></i>
+                        </div>
+                    </div>
+
+                    <div class="p-6">
+                        <div id="price-card-container" class="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto">
+                            <div id="original-price-box" class="bg-gradient-to-br from-indigo-50 to-blue-50/50 p-6 rounded-2xl border border-indigo-100 flex flex-col justify-center items-center text-center shadow-xs sm:col-span-2">
+                                <span class="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1.5 flex items-center space-x-1">
+                                    <i class="fa-solid fa-tag text-[10px]"></i>
+                                    <span id="original-price-label">Precio de Venta</span>
+                                </span>
+                                <div id="prod-price" class="text-4xl font-extrabold text-indigo-600 tracking-tight">$0.00</div>
+                                
+                                <div id="inline-column-i-discount" class="hidden mt-3 inline-flex items-center space-x-1.5 px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-extrabold tracking-wide border border-emerald-300">
+                                    <i class="fa-solid fa-percent text-[10px]"></i>
+                                    <span id="inline-column-i-text">Descuento Columna I: 0%</span>
+                                </div>
+                            </div>
+
+                            <div id="discount-price-box" class="hidden bg-gradient-to-br from-emerald-50 to-teal-50/50 p-6 rounded-2xl border border-emerald-200 flex flex-col justify-center items-center text-center shadow-xs relative overflow-hidden sm:col-span-2">
+                                <div class="absolute top-2 right-2 px-2.5 py-1 bg-emerald-600 text-white text-xs font-extrabold rounded-full uppercase tracking-wider shadow-xs" id="prod-discount-badge">0% DESC</div>
+                                <span class="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1.5 flex items-center space-x-1">
+                                    <i class="fa-solid fa-percent text-[10px]"></i>
+                                    <span>Porcentaje de Descuento (Columna I)</span>
+                                </span>
+                                <div id="prod-final-price" class="text-3xl font-extrabold text-emerald-700 tracking-tight">0%</div>
+                            </div>
+                        </div>
+
+                        <!-- Precio con descuento aplicado oculto según solicitud -->
+                        <div id="discount-breakdown-box" class="hidden"></div>
+                    </div>
+
+                    <div class="px-6 pb-4 flex items-center justify-between">
+                        <button onclick="startBarcodeScanner()" class="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl transition flex items-center space-x-1.5 shadow-2xs">
+                            <i class="fa-solid fa-barcode text-indigo-600"></i>
+                            <span>Escanear Otro</span>
+                        </button>
+                        <button onclick="copyProductDetails()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition flex items-center space-x-1.5 shadow-2xs">
+                            <i class="fa-solid fa-copy text-slate-500"></i>
+                            <span>Copiar Detalles</span>
+                        </button>
+                    </div>
+
+                    <div id="prod-extra-section" class="hidden px-6 pb-6 pt-0">
+                        <div class="border-t border-slate-100 pt-4 text-xs text-slate-500 space-y-1" id="prod-extra-content"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="initial-state" class="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 text-center space-y-3">
+                <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto text-2xl shadow-inner">
+                    <i class="fa-solid fa-barcode"></i>
+                </div>
+                <div class="space-y-1 max-w-sm mx-auto">
+                    <h3 class="text-sm font-bold text-slate-900">Listo para consultar</h3>
+                    <p class="text-xs text-slate-500">Escribe en el buscador superior o utiliza la cámara de tu dispositivo para escanear el código de barras del producto.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 2: ADMIN PANEL -->
+        <div id="view-admin" class="hidden space-y-6">
+            <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-bold text-sm">
+                        <i class="fa-solid fa-gear"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900">Panel de Administración</h2>
+                        <p class="text-[11px] text-slate-500">Gestión de base de datos y enlace de Google Drive en la nube</p>
+                    </div>
+                </div>
+                <button onclick="switchView('consult')" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition flex items-center space-x-1">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>Volver al Consultor</span>
+                </button>
+            </div>
+
+            <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 space-y-3">
+                <div class="flex items-center space-x-2">
+                    <div class="w-7 h-7 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center text-xs">
+                        <i class="fa-brands fa-google-drive"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xs font-bold text-slate-900">Enlace de Google Drive</h3>
+                        <p class="text-[11px] text-slate-500">Sincroniza automáticamente los productos desde tu hoja de cálculo compartida</p>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <input type="url" id="gdrive-url-input" 
+                        value="https://docs.google.com/spreadsheets/d/1IETwShhZEdjBbHWNqxVnxQXNvc1XXhEOVvBMN5MIalI/edit?usp=sharing"
+                        placeholder="https://docs.google.com/spreadsheets/d/.../edit" 
+                        class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition font-mono">
+                    
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="text-[11px] text-slate-400">Asegúrate de que el enlace sea público (Cualquier persona con el enlace).</span>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="saveDriveUrlCloud()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-xs transition flex items-center space-x-1">
+                                <i class="fa-solid fa-floppy-disk text-slate-500"></i>
+                                <span>Guardar Link</span>
+                            </button>
+                            <button onclick="syncFromDrive()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs shadow-xs transition flex items-center space-x-1.5">
+                                <i class="fa-solid fa-rotate"></i>
+                                <span>Sincronizar de Drive</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 space-y-3">
+                <div class="flex items-center space-x-2">
+                    <div class="w-7 h-7 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center text-xs">
+                        <i class="fa-solid fa-file-excel"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xs font-bold text-slate-900">Carga Manual de Archivo Excel (.xlsx / .xls / .csv)</h3>
+                        <p class="text-[11px] text-slate-500">Sube tu archivo directamente desde tu equipo</p>
+                    </div>
+                </div>
+
+                <div class="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:bg-slate-50/50 transition cursor-pointer relative">
+                    <input type="file" id="excel-file-input" accept=".xlsx, .xls, .csv" onchange="handleExcelUpload(event)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
+                    <div class="space-y-2 pointer-events-none">
+                        <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mx-auto text-base">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs font-semibold text-slate-700">Haz clic aquí para seleccionar tu archivo Excel</p>
+                            <p class="text-[10px] text-slate-400">Compatible con miles de filas de productos</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h3 class="text-xs font-bold text-slate-900">Estado de la Base de Datos</h3>
+                    <p id="admin-stats-label" class="text-[11px] text-slate-500">0 productos almacenados</p>
+                </div>
+                <button onclick="clearReportData()" class="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 font-semibold rounded-lg text-xs transition flex items-center space-x-1.5 border border-rose-200">
+                    <i class="fa-solid fa-trash-can"></i>
+                    <span>Restablecer Todo</span>
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Optimized Barcode Camera Scanner Modal -->
+    <div id="scanner-modal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex flex-col items-center justify-between p-3 sm:p-6">
+        <!-- Scanner Top Bar -->
+        <div class="w-full max-w-md flex justify-between items-center text-white py-2">
+            <div class="flex items-center space-x-2">
+                <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+                    <i class="fa-solid fa-barcode text-sm"></i>
+                </div>
+                <div>
+                    <h3 class="text-xs font-bold uppercase tracking-wider">Escáner de Cámara</h3>
+                    <p class="text-[10px] text-slate-400">Enfoca el código de barras dentro del recuadro</p>
+                </div>
+            </div>
+            <button onclick="stopBarcodeScanner()" class="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <!-- Camera Viewfinder Box -->
+        <div class="w-full max-w-md flex-1 flex items-center justify-center relative my-2">
+            <div id="reader" class="w-full h-full max-h-[420px] rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-slate-900 flex items-center justify-center"></div>
+        </div>
+
+        <!-- Scanner Controls Bottom Bar -->
+        <div class="w-full max-w-md flex flex-col space-y-3 pb-2">
+            <div id="torch-container" class="hidden flex justify-center">
+                <button id="torch-btn" onclick="toggleTorchLight()" class="px-4 py-2 bg-amber-500/20 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-bold flex items-center space-x-2 transition">
+                    <i class="fa-solid fa-bolt"></i>
+                    <span>Activar Linterna (Flash)</span>
+                </button>
+            </div>
+            <div class="bg-white/10 backdrop-blur-md p-3 rounded-2xl text-center border border-white/10">
+                <p class="text-xs text-slate-200 font-medium">Mantén el teléfono a unos 15-20 cm del código de barras</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay Modal for Massive Files -->
+    <div id="loading-overlay" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 text-center space-y-4">
+            <div class="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+            <div class="space-y-1">
+                <h3 id="loading-title" class="text-sm font-bold text-slate-900">Procesando datos...</h3>
+                <p id="loading-desc" class="text-xs text-slate-500">Por favor espera mientras se cargan los productos.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none"></div>
+
+    <!-- Global Application Logic & Firebase Script -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : undefined;
+
+        let app, db, auth;
+        let products = [];
+        let currentActiveProduct = null;
+        let html5QrCode = null;
+        let activeTrack = null;
+        let torchOn = false;
+        let isCloudInitialized = false;
+
+        window.showToast = function(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const toast = document.createElement('div');
+            const bgClass = type === 'success' ? 'bg-emerald-600 text-white' : type === 'error' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-white';
+            toast.className = `px-4 py-3 rounded-xl shadow-lg text-xs font-semibold flex items-center space-x-2 pointer-events-auto transition transform translate-y-2 opacity-0 animate-in fade-in slide-in-from-bottom-2 duration-200 ${bgClass}`;
+            toast.innerHTML = `
+                <i class="fa-solid ${type === 'success' ? 'fa-circle-check' : type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-info'} text-sm"></i>
+                <span>${escapeHtml(message)}</span>
+            `;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        };
+
+        window.escapeHtml = function(str) {
+            if (!str) return '';
+            return String(str).replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        };
+
+        window.showLoading = function(title, desc) {
+            document.getElementById('loading-title').innerText = title;
+            document.getElementById('loading-desc').innerText = desc;
+            document.getElementById('loading-overlay').classList.remove('hidden');
+        };
+
+        window.hideLoading = function() {
+            document.getElementById('loading-overlay').classList.add('hidden');
+        };
+
+        window.switchView = function(viewName) {
+            const consultView = document.getElementById('view-consult');
+            const adminView = document.getElementById('view-admin');
+            if (viewName === 'admin') {
+                consultView.classList.add('hidden');
+                adminView.classList.remove('hidden');
+                document.getElementById('admin-stats-label').innerText = `${products.length.toLocaleString()} productos almacenados`;
+            } else {
+                adminView.classList.add('hidden');
+                consultView.classList.remove('hidden');
+                document.getElementById('search-input').focus();
+            }
+        };
+
+        // Acceso directo al panel de administración sin contraseña
+        window.openAdminGate = function() {
+            window.switchView('admin');
+            showToast("Panel de administración abierto", "success");
+        };
+
+        window.saveDriveUrlCloud = async function() {
+            const urlInput = document.getElementById('gdrive-url-input').value.trim();
+            localStorage.setItem('jg_gdrive_url', urlInput);
+            
+            if (db && auth && auth.currentUser) {
+                try {
+                    const configDocRef = doc(db, 'artifacts', appId, 'public_data', 'config_state');
+                    await setDoc(configDocRef, { gdriveUrl: urlInput, updatedAt: new Date().toISOString() }, { merge: true });
+                } catch (e) {
+                    console.warn("Could not save GDrive URL to cloud due to permissions:", e);
+                }
+            }
+            showToast("Enlace de Google Drive guardado", "success");
+        };
+
+        window.syncFromDrive = async function() {
+            const urlInput = document.getElementById('gdrive-url-input').value.trim();
+            if (!urlInput) {
+                showToast("Ingresa un enlace válido de Google Sheets", "error");
+                return;
+            }
+
+            let exportUrl = urlInput;
+            const match = urlInput.match(/\/d\/([a-zA-Z0-9-_]+)/);
+            if (match && match[1]) {
+                const spreadsheetId = match[1];
+                exportUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`;
+            } else if (!exportUrl.includes('format=csv')) {
+                exportUrl += (exportUrl.includes('?') ? '&' : '?') + 'output=csv';
+            }
+
+            showLoading("Sincronizando con Google Drive", "Descargando datos en la nube...");
+
+            try {
+                let response;
+                try {
+                    response = await fetch(exportUrl);
+                    if (!response.ok) throw new Error("Network response not ok");
+                } catch (err) {
+                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(exportUrl)}`;
+                    response = await fetch(proxyUrl);
+                }
+
+                if (!response.ok) throw new Error("No se pudo descargar el archivo de Google Sheets.");
+
+                const csvText = await response.text();
+                const workbook = XLSX.read(csvText, { type: 'string', cellDates: true });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const rawJson = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+                processRawRowsChunked(rawJson);
+                await window.saveDriveUrlCloud();
+            } catch (error) {
+                hideLoading();
+                console.error("Sync error:", error);
+                showToast("Error al sincronizar. Verifica que el enlace sea público.", "error");
+            }
+        };
+
+        async function saveProductsToCloud() {
+            if (db && auth && auth.currentUser) {
+                try {
+                    const productsDocRef = doc(db, 'artifacts', appId, 'public_data', 'products_state');
+                    if (products.length < 2000) {
+                        await setDoc(productsDocRef, { products: products, total: products.length, updatedAt: new Date().toISOString() });
+                    }
+                } catch (e) {
+                    console.warn("Cloud products save skipped due to permissions:", e);
+                }
+            }
+            try {
+                sessionStorage.setItem('jg_reporte_06', JSON.stringify(products));
+            } catch (e) {
+                console.warn("Session storage limit reached");
+            }
+        }
+
+        window.processRawRowsChunked = function(rawJson) {
+            showLoading("Procesando Inventario", "Analizando filas y columnas de precios...");
+            setTimeout(() => {
+                const mapped = [];
+                rawJson.forEach((row) => {
+                    const keys = Object.keys(row);
+                    if (keys.length === 0) return;
+
+                    let codigo = row[keys[0]] || row['Codigo'] || row['CÓDIGO'] || row['codigo'] || '';
+                    let codigoBarras = row[keys[1]] || row['CodigoBarras'] || row['CÓDIGO DE BARRAS'] || row['codigoBarras'] || '';
+                    let nombre = row[keys[2]] || row['Nombre'] || row['NOMBRE'] || row['nombre'] || row['Descripcion'] || '';
+                    
+                    let rawPrecio = 0;
+                    if (keys.length > 11) {
+                        rawPrecio = row[keys[11]] !== undefined && row[keys[11]] !== '' ? row[keys[11]] : (row[keys[3]] || 0);
+                    } else if (keys.length > 3) {
+                        rawPrecio = row[keys[3]] || 0;
+                    }
+                    
+                    let descuento = 0;
+                    if (keys.length > 8) {
+                        const colIVal = row[keys[8]];
+                        if (colIVal !== undefined && colIVal !== '') {
+                            const parsed = parseFloat(String(colIVal).replace('%', '').trim());
+                            if (!isNaN(parsed)) descuento = parsed;
+                        }
+                    }
+
+                    if (typeof rawPrecio === 'string') {
+                        rawPrecio = parseFloat(rawPrecio.replace(/[^0-9.-]+/g, "")) || 0;
+                    }
+
+                    if (String(nombre).trim() !== '' || String(codigo).trim() !== '') {
+                        mapped.push({
+                            codigo: String(codigo).trim(),
+                            codigoBarras: String(codigoBarras).trim(),
+                            nombre: String(nombre).trim(),
+                            precio: Number(rawPrecio),
+                            descuento: Number(descuento),
+                            categoria: String(row[keys[4]] || 'GENERAL').trim()
+                        });
+                    }
+                });
+
+                products = mapped;
+                updateStatsAndUI();
+                hideLoading();
+                showToast(`¡Se cargaron ${products.length.toLocaleString()} productos usando el precio de la Columna L!`, "success");
+                saveProductsToCloud();
+            }, 100);
+        };
+
+        window.updateStatsAndUI = function() {
+            const count = products.length;
+            const counterBanner = document.getElementById('consult-counter-banner');
+            const counterText = document.getElementById('consult-counter-text');
+            const statusBadge = document.getElementById('status-badge');
+            const statusText = document.getElementById('status-text');
+
+            if (count > 0) {
+                counterText.innerText = `${count.toLocaleString()} productos disponibles`;
+                counterBanner.classList.remove('hidden');
+                statusBadge.classList.remove('hidden');
+                statusText.innerText = `Cargado (${count.toLocaleString()} items)`;
+            } else {
+                counterBanner.classList.add('hidden');
+                statusBadge.classList.add('hidden');
+            }
+        };
+
+        window.clearReportData = async function() {
+            if (confirm("¿Estás seguro de restablecer todos los productos y datos?")) {
+                products = [];
+                localStorage.removeItem('jg_gdrive_url');
+                sessionStorage.removeItem('jg_reporte_06');
+                updateStatsAndUI();
+                window.switchView('consult');
+                showToast("Datos restablecidos", "info");
+            }
+        };
+
+        function setupSearchListeners() {
+            const searchInput = document.getElementById('search-input');
+            const clearBtn = document.getElementById('clear-btn');
+            const suggestionsBox = document.getElementById('suggestions-box');
+
+            if (!searchInput) return;
+
+            searchInput.addEventListener('input', (e) => {
+                const query = e.target.value.trim().toLowerCase();
+                if (query.length > 0) {
+                    clearBtn.classList.remove('hidden');
+                } else {
+                    clearBtn.classList.add('hidden');
+                    hideResult();
+                    suggestionsBox.classList.add('hidden');
+                    return;
+                }
+
+                const exactMatch = products.find(p => 
+                    String(p.codigo || '').toLowerCase() === query || 
+                    String(p.codigoBarras || '').toLowerCase() === query
+                );
+
+                if (exactMatch) {
+                    displayProduct(exactMatch);
+                    suggestionsBox.classList.add('hidden');
+                    return;
+                }
+
+                const matches = products.filter(p => 
+                    String(p.nombre || '').toLowerCase().includes(query) ||
+                    String(p.codigo || '').toLowerCase().includes(query) ||
+                    String(p.codigoBarras || '').toLowerCase().includes(query)
+                );
+
+                if (matches.length === 1) {
+                    // Automatically show if there is only 1 match
+                    displayProduct(matches[0]);
+                    suggestionsBox.classList.add('hidden');
+                    return;
+                } else if (matches.length > 0) {
+                    suggestionsBox.innerHTML = '';
+                    matches.slice(0, 10).forEach(prod => {
+                        const div = document.createElement('div');
+                        div.className = 'p-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center transition';
+                        div.innerHTML = `
+                            <div>
+                                <p class="text-xs font-bold text-slate-800">${escapeHtml(prod.nombre)}</p>
+                                <p class="text-[10px] text-slate-400 font-mono">Código: ${escapeHtml(String(prod.codigo || prod.codigoBarras || ''))}</p>
+                            </div>
+                            <span class="text-xs font-bold text-indigo-600">$${Number(prod.precio || 0).toFixed(2)}</span>
+                        `;
+                        div.addEventListener('click', () => {
+                            displayProduct(prod);
+                            suggestionsBox.classList.add('hidden');
+                            searchInput.value = '';
+                            clearBtn.classList.add('hidden');
+                        });
+                        suggestionsBox.appendChild(div);
+                    });
+                    suggestionsBox.classList.remove('hidden');
+                } else {
+                    suggestionsBox.classList.add('hidden');
+                }
+            });
+
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    const query = searchInput.value.trim().toLowerCase();
+                    const found = products.find(p => 
+                        String(p.codigo || '').toLowerCase() === query || 
+                        String(p.codigoBarras || '').toLowerCase() === query ||
+                        String(p.nombre || '').toLowerCase().includes(query)
+                    );
+                    if (found) {
+                        displayProduct(found);
+                        suggestionsBox.classList.add('hidden');
+                    }
+                }
+            });
+        }
+
+        window.clearSearch = function() {
+            document.getElementById('search-input').value = '';
+            document.getElementById('clear-btn').classList.add('hidden');
+            document.getElementById('suggestions-box').classList.add('hidden');
+            hideResult();
+            document.getElementById('search-input').focus();
+        };
+
+        function hideResult() {
+            document.getElementById('result-container').classList.add('hidden');
+            document.getElementById('initial-state').classList.remove('hidden');
+            currentActiveProduct = null;
+        }
+
+        function displayProduct(prod) {
+            currentActiveProduct = prod;
+            document.getElementById('initial-state').classList.add('hidden');
+            document.getElementById('result-container').classList.remove('hidden');
+
+            document.getElementById('prod-category').innerText = String(prod.categoria || 'GENERAL').toUpperCase();
+            document.getElementById('prod-name').innerText = prod.nombre || 'Sin Nombre';
+            document.getElementById('prod-code').innerText = `CÓDIGO: ${prod.codigo || prod.codigoBarras || 'N/D'}`;
+            
+            const basePrice = Number(prod.precio || 0);
+            const discountPct = Number(prod.descuento || 0);
+
+            const origLabel = document.getElementById('original-price-label');
+            const discBox = document.getElementById('discount-price-box');
+            const discBadge = document.getElementById('prod-discount-badge');
+            const headerDiscBadge = document.getElementById('header-discount-badge');
+            const finalPriceEl = document.getElementById('prod-final-price');
+            
+            const inlineColIDiv = document.getElementById('inline-column-i-discount');
+            const inlineColIText = document.getElementById('inline-column-i-text');
+
+            document.getElementById('prod-price').innerText = `$${basePrice.toFixed(2)}`;
+
+            if (discountPct > 0) {
+                inlineColIText.innerText = `Descuento Columna I: ${discountPct}%`;
+                inlineColIDiv.classList.remove('hidden');
+            } else {
+                inlineColIDiv.classList.add('hidden');
+            }
+
+            if (discountPct > 0) {
+                origLabel.innerText = "Precio Original";
+                const discountText = `${discountPct}% DESC`;
+                
+                discBadge.innerText = discountText;
+                headerDiscBadge.innerText = discountText;
+                headerDiscBadge.classList.remove('hidden');
+
+                finalPriceEl.innerText = discountText;
+                discBox.classList.remove('hidden');
+            } else {
+                origLabel.innerText = "Precio de Venta";
+                discBox.classList.add('hidden');
+                headerDiscBadge.classList.add('hidden');
+            }
+        }
+
+        window.copyProductDetails = function() {
+            if (!currentActiveProduct) return;
+            const text = `Producto: ${currentActiveProduct.nombre}\nCódigo: ${currentActiveProduct.codigo || currentActiveProduct.codigoBarras}\nPrecio: $${currentActiveProduct.precio.toFixed(2)}`;
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showToast("Detalles copiados al portapapeles", "success");
+            } catch (err) {
+                showToast("No se pudo copiar", "error");
+            }
+            document.body.removeChild(textarea);
+        };
+
+        window.startBarcodeScanner = function() {
+            document.getElementById('scanner-modal').classList.remove('hidden');
+            const torchContainer = document.getElementById('torch-container');
+            torchContainer.classList.add('hidden');
+            torchOn = false;
+
+            try {
+                html5QrCode = new Html5Qrcode("reader");
+                const qrboxSize = Math.min(window.innerWidth * 0.8, 300);
+                
+                // Optimized configuration for iOS and mobile devices with focus/exposure constraints
+                const config = {
+                    fps: 25,
+                    qrbox: { width: qrboxSize, height: qrboxSize * 0.45 },
+                    aspectRatio: 1.0,
+                    formatsToSupport: [
+                        Html5QrcodeSupportedFormats.EAN_13,
+                        Html5QrcodeSupportedFormats.EAN_8,
+                        Html5QrcodeSupportedFormats.CODE_128,
+                        Html5QrcodeSupportedFormats.CODE_39,
+                        Html5QrcodeSupportedFormats.UPC_A,
+                        Html5QrcodeSupportedFormats.UPC_E,
+                        Html5QrcodeSupportedFormats.QR_CODE
+                    ]
+                };
+
+                // Advanced video constraints tailored for iOS autofocus support
+                const cameraConfig = {
+                    facingMode: "environment",
+                    focusMode: "continuous"
+                };
+
+                html5QrCode.start(
+                    cameraConfig,
+                    config,
+                    (decodedText) => {
+                        playBeepSound();
+                        stopBarcodeScanner();
+                        
+                        const found = products.find(p => 
+                            String(p.codigo || '').toLowerCase() === decodedText.toLowerCase() || 
+                            String(p.codigoBarras || '').toLowerCase() === decodedText.toLowerCase()
+                        );
+                        
+                        if (found) {
+                            displayProduct(found);
+                            showToast(`¡Producto encontrado automáticamente!`, "success");
+                        } else {
+                            const searchInput = document.getElementById('search-input');
+                            const clearBtn = document.getElementById('clear-btn');
+                            searchInput.value = decodedText;
+                            clearBtn.classList.remove('hidden');
+                            
+                            const event = new Event('input', { bubbles: true });
+                            searchInput.dispatchEvent(event);
+                            
+                            showToast(`Código escaneado: ${decodedText}`, "info");
+                        }
+                    },
+                    (errorMessage) => {
+                        // ignore frame scanning misses
+                    }
+                ).then(() => {
+                    // Try getting video track to enable autofocus and torch if supported by iOS/device
+                    setTimeout(() => {
+                        try {
+                            const videoElement = document.querySelector('#reader video');
+                            if (videoElement && videoElement.srcObject) {
+                                const tracks = videoElement.srcObject.getVideoTracks();
+                                if (tracks && tracks.length > 0) {
+                                    activeTrack = tracks[0];
+                                    const capabilities = activeTrack.getCapabilities ? activeTrack.getCapabilities() : {};
+                                    
+                                    // Request continuous autofocus if capabilities exist
+                                    if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+                                        activeTrack.applyConstraints({
+                                            advanced: [{ focusMode: 'continuous' }]
+                                        }).catch(() => {});
+                                    }
+
+                                    if (capabilities && capabilities.torch) {
+                                        torchContainer.classList.remove('hidden');
+                                    }
+                                }
+                            }
+                        } catch (e) {}
+                    }, 800);
+                }).catch(err => {
+                    console.error("Scanner start error:", err);
+                    // Fallback to basic environment camera if advanced constraints fail on certain iOS versions
+                    html5QrCode.start({ facingMode: "environment" }, config, (decodedText) => {
+                        playBeepSound();
+                        stopBarcodeScanner();
+                        const found = products.find(p => 
+                            String(p.codigo || '').toLowerCase() === decodedText.toLowerCase() || 
+                            String(p.codigoBarras || '').toLowerCase() === decodedText.toLowerCase()
+                        );
+                        if (found) {
+                            displayProduct(found);
+                            showToast(`¡Producto encontrado!`, "success");
+                        } else {
+                            const searchInput = document.getElementById('search-input');
+                            searchInput.value = decodedText;
+                            document.getElementById('clear-btn').classList.remove('hidden');
+                            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                    }, () => {}).catch(fallbackErr => {
+                        showToast("No se pudo iniciar la cámara. Verifica los permisos en tu navegador (Safari/Chrome).", "error");
+                        stopBarcodeScanner();
+                    });
+                });
+            } catch (e) {
+                console.error("QR Init error:", e);
+                stopBarcodeScanner();
+            }
+        };
+
+        window.toggleTorchLight = function() {
+            if (!activeTrack) return;
+            torchOn = !torchOn;
+            activeTrack.applyConstraints({
+                advanced: [{ torch: torchOn }]
+            }).then(() => {
+                const btn = document.getElementById('torch-btn');
+                if (torchOn) {
+                    btn.className = "px-4 py-2 bg-amber-500 text-slate-950 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition shadow-lg";
+                    btn.innerHTML = `<i class="fa-solid fa-bolt-lightning"></i><span>Linterna Activada</span>`;
+                } else {
+                    btn.className = "px-4 py-2 bg-amber-500/20 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-bold flex items-center space-x-2 transition";
+                    btn.innerHTML = `<i class="fa-solid fa-bolt"></i><span>Activar Linterna (Flash)</span>`;
+                }
+            }).catch(err => {
+                console.warn("Torch error:", err);
+            });
+        };
+
+        function playBeepSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.1);
+            } catch (e) {}
+        }
+
+        window.stopBarcodeScanner = function() {
+            document.getElementById('scanner-modal').classList.add('hidden');
+            if (torchOn && activeTrack) {
+                try {
+                    activeTrack.applyConstraints({ advanced: [{ torch: false }] });
+                } catch (e) {}
+                torchOn = false;
+            }
+            activeTrack = null;
+            if (html5QrCode) {
+                html5QrCode.stop().catch(() => {}).finally(() => {
+                    html5QrCode = null;
+                });
+            }
+        };
+
+        window.triggerPhotoScan = function() {
+            document.getElementById('photo-scan-input').click();
+        };
+
+        window.handlePhotoScanUpload = function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            showLoading("Escaneando Imagen", "Analizando código de barras en la foto...");
+            const html5QrCodePhoto = new Html5Qrcode("reader-hidden-file") || new Html5Qrcode(document.createElement('div'));
+            
+            html5QrCodePhoto.scanFile(file, true)
+                .then(decodedText => {
+                    hideLoading();
+                    const found = products.find(p => 
+                        String(p.codigo || '').toLowerCase() === decodedText.toLowerCase() || 
+                        String(p.codigoBarras || '').toLowerCase() === decodedText.toLowerCase()
+                    );
+                    if (found) {
+                        displayProduct(found);
+                        showToast("¡Producto encontrado en la imagen!", "success");
+                    } else {
+                        document.getElementById('search-input').value = decodedText;
+                        showToast(`Código detectado: ${decodedText}`, "success");
+                    }
+                })
+                .catch(err => {
+                    hideLoading();
+                    showToast("No se pudo detectar ningún código de barras en la imagen", "error");
+                });
+            event.target.value = '';
+        };
+
+        window.handleExcelUpload = function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            showLoading("Leyendo archivo Excel", "Procesando registros...");
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const rawJson = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+                    processRawRowsChunked(rawJson);
+                } catch (error) {
+                    hideLoading();
+                    showToast("Error al leer el archivo Excel", "error");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+            event.target.value = '';
+        };
+
+        window.onload = async function() {
+            setupSearchListeners();
+            
+            const savedDriveUrl = localStorage.getItem('jg_gdrive_url');
+            if (savedDriveUrl) {
+                document.getElementById('gdrive-url-input').value = savedDriveUrl;
+            }
+
+            const cachedReport = sessionStorage.getItem('jg_reporte_06');
+            if (cachedReport) {
+                try {
+                    products = JSON.parse(cachedReport);
+                    updateStatsAndUI();
+                } catch (e) {}
+            }
+
+            if (typeof firebaseConfig !== 'undefined' && firebaseConfig.apiKey) {
+                try {
+                    app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    auth = getAuth(app);
+                    
+                    if (initialAuthToken) {
+                        try {
+                            await signInWithCustomToken(auth, initialAuthToken);
+                        } catch (e) {
+                            await signInAnonymously(auth);
+                        }
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+
+                    onAuthStateChanged(auth, async (user) => {
+                        if (user && !isCloudInitialized) {
+                            isCloudInitialized = true;
+                            try {
+                                const configDocRef = doc(db, 'artifacts', appId, 'public_data', 'config_state');
+                                onSnapshot(configDocRef, (docSnap) => {
+                                    if (docSnap.exists()) {
+                                        const data = docSnap.data();
+                                        if (data.gdriveUrl && !localStorage.getItem('jg_gdrive_url')) {
+                                            document.getElementById('gdrive-url-input').value = data.gdriveUrl;
+                                            localStorage.setItem('jg_gdrive_url', data.gdriveUrl);
+                                        }
+                                    }
+                                }, (error) => {
+                                    console.warn("Config listener permission note:", error.message);
+                                });
+
+                                const productsDocRef = doc(db, 'artifacts', appId, 'public_data', 'products_state');
+                                onSnapshot(productsDocRef, (docSnap) => {
+                                    if (docSnap.exists() && products.length === 0) {
+                                        const data = docSnap.data();
+                                        if (data.products && Array.isArray(data.products) && data.products.length > 0) {
+                                            products = data.products;
+                                            updateStatsAndUI();
+                                        }
+                                    }
+                                }, (error) => {
+                                    console.warn("Products listener permission note:", error.message);
+                                });
+                            } catch (e) {
+                                console.warn("Cloud listeners notice:", e);
+                            }
+                        }
+                    });
+                } catch (e) {
+                    console.warn("Firebase init notice:", e);
+                }
+            }
+        };
+    </script>
+</body>
+</html>
